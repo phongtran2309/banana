@@ -10,7 +10,6 @@ const { HttpsProxyAgent } = require('https-proxy-agent');
 class BananaBot {
     constructor() {
         this.base_url = 'https://interface.carv.io/banana';
-        this.bananasOverOneUSDT = [];
         this.headers = {
             'Content-Type': 'application/json',
             'Accept': 'application/json, text/plain, */*',
@@ -141,64 +140,42 @@ class BananaBot {
         });
     }
 
-	async equipBestBanana(currentEquipBananaId, proxy, accountIndex) {
-		try {
-			const response = await axios.get(`${this.base_url}/get_banana_list`, { headers: this.headers, httpsAgent: new HttpsProxyAgent(proxy) });
-			const bananas = response.data.data.banana_list;
-
-			const eligibleBananas = bananas.filter(banana => banana.count >= 1);
-			if (eligibleBananas.length > 0) {
-				const bestBanana = eligibleBananas.reduce((prev, current) => {
-					return (prev.daily_peel_limit > current.daily_peel_limit) ? prev : current;
-				});
-
-				if (bestBanana.banana_id === currentEquipBananaId) {
-					this.log(colors.green(`Đang sử dụng quả chuối tốt nhất: ${colors.yellow(bestBanana.name)} | Price : ${colors.yellow(bestBanana.sell_exchange_peel)} Peels / ${colors.yellow(bestBanana.sell_exchange_usdt)} USDT.`));
-					
-					if (bestBanana.sell_exchange_usdt >= 0.1) {
-						this.log(colors.red(`Đã đạt mục tiêu! Giá trị USDT của chuối: ${colors.yellow(bestBanana.sell_exchange_usdt)} USDT`));
-
-						const filePath = path.join(__dirname, 'banana.txt');
-						const newBananaInfo = `Account ${accountIndex + 1}: ${bestBanana.name} - ${bestBanana.sell_exchange_usdt} USDT`;
-						
-						let fileContent = fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf8').split('\n') : [];
-						
-						let updated = false;
-						for (let i = 0; i < fileContent.length; i++) {
-							if (fileContent[i].startsWith(`Account ${accountIndex + 1}:`)) {
-								const currentUSDT = parseFloat(fileContent[i].split(' - ')[1]);
-								if (bestBanana.sell_exchange_usdt > currentUSDT) {
-									fileContent[i] = newBananaInfo;
-								}
-								updated = true;
-								break;
-							}
-						}
-						
-						if (!updated) {
-							fileContent.push(newBananaInfo);
-						}
-						
-						fs.writeFileSync(filePath, fileContent.join('\n'));
-					}
-					return;
-				}
-
-				const equipPayload = { bananaId: bestBanana.banana_id };
-				const equipResponse = await axios.post(`${this.base_url}/do_equip`, equipPayload, { headers: this.headers, httpsAgent: new HttpsProxyAgent(proxy) });
-				if (equipResponse.data.code === 0) {
-					this.log(colors.green(`Đã Equip quả chuối tốt nhất: ${colors.yellow(bestBanana.name)} với ${bestBanana.daily_peel_limit} 🍌/ DAY`));
-				} else {
-					this.log(colors.red('Sử dụng chuối thất bại!'));
-				}
-			} else {
-				this.log(colors.red('Không có quả chuối nào được tìm thấy !'));
-			}
-		} catch (error) {
-			this.log('Lỗi rồi: ' + error.message);
-		}
-	}
-
+    async equipBestBanana(currentEquipBananaId, proxy) {
+        try {
+            const response = await axios.get(`${this.base_url}/get_banana_list`, { headers: this.headers, httpsAgent: new HttpsProxyAgent(proxy) });
+            const bananas = response.data.data.banana_list;
+    
+            const eligibleBananas = bananas.filter(banana => banana.count >= 1);
+            if (eligibleBananas.length > 0) {
+                const bestBanana = eligibleBananas.reduce((prev, current) => {
+                    return (prev.daily_peel_limit > current.daily_peel_limit) ? prev : current;
+                });
+    
+                if (bestBanana.banana_id === currentEquipBananaId) {
+                    this.log(colors.green(`Đang sử dụng quả chuối tốt nhất: ${colors.yellow(bestBanana.name)} | Price : ${colors.yellow(bestBanana.sell_exchange_peel)} Peels / ${colors.yellow(bestBanana.sell_exchange_usdt)} USDT.`));
+                    
+                    if (bestBanana.sell_exchange_usdt >= 1) {
+                        this.log(colors.red(`Đã đạt mục tiêu! Giá trị USDT của chuối: ${colors.yellow(bestBanana.sell_exchange_usdt)} USDT`));
+                        process.exit(0);
+                    }
+                    
+                    return;
+                }
+    
+                const equipPayload = { bananaId: bestBanana.banana_id };
+                const equipResponse = await axios.post(`${this.base_url}/do_equip`, equipPayload, { headers: this.headers, httpsAgent: new HttpsProxyAgent(proxy) });
+                if (equipResponse.data.code === 0) {
+                    this.log(colors.green(`Đã Equip quả chuối tốt nhất: ${colors.yellow(bestBanana.name)} với ${bestBanana.daily_peel_limit} 🍌/ DAY`));
+                } else {
+                    this.log(colors.red('Sử dụng chuối thất bại!'));
+                }
+            } else {
+                this.log(colors.red('Không có quả chuối nào được tìm thấy !'));
+            }
+        } catch (error) {
+            this.log('Lỗi rồi: ' + error.message);
+        }
+    }
 	
     askQuestion(query) {
         const rl = readline.createInterface({
@@ -243,7 +220,7 @@ class BananaBot {
         }
     }
 
-	async processAccount(queryId, proxy, doQuests, accountIndex) {
+	async processAccount(queryId, proxy, isFirstAccount = false, doQuests) {
         let remainingTimeMinutes = Infinity;
         const token = await this.login(queryId, proxy);
         if (token) {
@@ -270,7 +247,7 @@ class BananaBot {
                 this.log(colors.green(`Speed Up : ${colors.white(speedup)}`));
                 this.log(colors.green(`Hôm nay đã tap : ${colors.white(todayClickCount)} lần`));
     
-				await this.equipBestBanana(currentEquipBananaId, proxy, accountIndex);
+                await this.equipBestBanana(currentEquipBananaId, proxy);
 
                 try {
                     const lotteryInfoResponse = await this.getLotteryInfo(proxy);
@@ -456,7 +433,10 @@ class BananaBot {
             } catch (error) {
                 this.log('Không thể tìm nạp thông tin người dùng và danh sách nhiệm vụ do thiếu mã thông báo.');
             }
-            return remainingTimeMinutes;
+    
+            if (isFirstAccount) {
+                return remainingTimeMinutes;
+            }
         }
         return null;
     }    
@@ -510,12 +490,11 @@ class BananaBot {
         
         const proxyFile = path.join(__dirname, 'proxy.txt');
         const proxies = fs.readFileSync(proxyFile, 'utf8').split('\n').filter(Boolean);
-        const doQuestsAnswer = await this.askQuestion('Bạn có muốn làm nhiệm vụ không? (y/n): ');
-        const doQuests = doQuestsAnswer.toLowerCase() === 'y';
-
+		const doQuestsAnswer = await this.askQuestion('Bạn có muốn làm nhiệm vụ không? (y/n): ');
+		const doQuests = doQuestsAnswer.toLowerCase() === 'y';
         while (true) {
             let minRemainingTime = Infinity;
-
+    
             for (let i = 0; i < userData.length; i++) {
                 const queryId = userData[i];
                 const data = this.extractUserData(queryId);
@@ -526,9 +505,9 @@ class BananaBot {
                     const proxyIP = await this.checkProxyIP(proxy);
                     if (queryId) {
                         console.log(`\n========== Tài khoản ${i + 1} | ${userDetail.first_name} | IP: ${proxyIP} ==========`);
-                        const remainingTime = await this.processAccount(queryId, proxy, doQuests, i);
+						const remainingTime = await this.processAccount(queryId, proxy, i === 0, doQuests);
     
-                        if (remainingTime !== null && remainingTime < minRemainingTime) {
+                        if (i === 0 && remainingTime !== null) {
                             minRemainingTime = remainingTime;
                         }
                     }
@@ -539,10 +518,14 @@ class BananaBot {
                 
                 await this.sleep(1000); 
             }
-
-            const remainingDuration = Duration.fromMillis(minRemainingTime * 60 * 1000);
-            const remainingSeconds = remainingDuration.as('seconds');
-            await this.Countdown(remainingSeconds > 0 ? remainingSeconds : 10 * 60);
+    
+            if (minRemainingTime < Infinity) {
+                const remainingDuration = Duration.fromMillis(minRemainingTime * 60 * 1000);
+                const remainingSeconds = remainingDuration.as('seconds');
+                await this.Countdown(remainingSeconds); 
+            } else {
+                await this.Countdown(10 * 60);
+            }
         }
     }
 }    
