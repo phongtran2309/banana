@@ -64,6 +64,8 @@ class Banana:
             == "true"
         )
 
+        self.min_harvest_time = float('inf')
+
     def load_existing_entries(self):
         try:
             with open(banana_file, "r", encoding="utf-8") as f:
@@ -419,6 +421,8 @@ class Banana:
             num_acc = len(data)
             self.log(self.line)
             self.log(f"{green}Tổng tài khoản: {white}{num_acc}")
+            self.min_harvest_time = float('inf')
+
             for no, data in enumerate(data):
                 self.log(self.line)
                 self.log(f"{green}Tài khoản: {white}{no+1}/{num_acc}")
@@ -605,6 +609,8 @@ class Banana:
                                 remaining_time_str = f"{int(remaining_time)} phút" if remaining_time > 0 else "0 phút"
                                 
                                 self.log(f"{white}Thời gian còn lại để thu hoạch: {green}{remaining_time_str}")
+                                self.min_harvest_time = min(self.min_harvest_time, remaining_time)
+                                self.log(f"{white}Số lượng lottery còn lại: {green}{lottery_count}")
 
                                 get_user_info = self.user_info(token=token).json()
                                 speedup_count = get_user_info["data"]["speedup_count"]
@@ -634,7 +640,8 @@ class Banana:
                                     else:
                                         self.log(f"{white}Claim Banana: {red}Thất bại")
                                         self.log(f"{red}Chi tiết lỗi: {claim_lottery}")
-                                elif lottery_count > 0:
+                                
+                                while lottery_count > 0:
                                     do_lottery_response = self.do_lottery(token=token)
                                     do_lottery = do_lottery_response.json()
                                     lottery_status = do_lottery.get('msg')
@@ -662,9 +669,21 @@ class Banana:
                                             self.log(f"{green}Share chuối thành công!")
                                         else:
                                             self.log(f"{red}Share chuối thất bại: {share_response['msg']}")
+                                        
+                                        lottery_count -= 1
+                                        self.log(f"{white}Số lượng chuối chưa harvest: {green}{lottery_count}")
+
+                                        if lottery_count > 0:
+                                            self.log(f"{yellow}Chờ 10 giây trước khi harvest chuối tiếp theo...")
+                                            time.sleep(10)
                                     else:
                                         self.log(f"{white}Harvest Banana: {red}Thất bại")
                                         self.log(f"{red}Chi tiết lỗi: {do_lottery}")
+                                        break
+                                
+                                if lottery_count == 0:
+                                    self.log(f"{white}Đã harvest hết tất cả chuối")
+                                    break
                                 else:
                                     self.log(f"{white}Claim and Harvest Banana: {yellow}Chưa đến thời gian thu hoạch")
                                     break
@@ -729,8 +748,8 @@ class Banana:
                     self.log(f"{red}Đăng nhập thất bại, thử lại sau!")
 
             print()
-            wait_time = 60 * 60
-            self.log(f"{yellow}Cần chờ {int(wait_time/60)} để tiếp tục!")
+            wait_time = max(1, int(self.min_harvest_time * 60))
+            self.log(f"{yellow}Cần chờ {int(wait_time/60)} phút {wait_time%60} giây để tiếp tục!")
             time.sleep(wait_time)
 
 
